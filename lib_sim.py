@@ -573,7 +573,7 @@ def compute_spin_dynamics(
     
     print("All simulations complete!")
     
-    return magnetization_list
+    return magnetization_list, Gammas, J_matrices
 
 
 
