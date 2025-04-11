@@ -6,19 +6,33 @@ from tqdm import tqdm  # For progress bars
 import scipy.constants as cst 
 
 
-Gamma_0 = 2*np.pi *6.065 *1e6 # natural linewidth of the Rb transition
+
+# Libary that compute the evolution of a dissipative system using the DTWA approach 
+# as described in arXiv:2503.17443
+
+# Function Hierarchy and Workflow in the DTWA Simulation
+
+# The simulation workflow follows this general pattern:
+# 1. compute_spin_dynamics() - Main entry point that sets up and runs simulations
+#    ├── compute_green_tensor() - Calculates the Green tensor for dipole interactions
+#    ├── compute_gamma_matrix() - Calculates the decay rate matrix
+#    ├── compute_coupling_matrix() - Calculates the coupling matrix (J)
+#    └── For each of the num_simulations:
+#        ├── generate_noises() - Creates noise terms for the stochastic simulation
+#        └── SpinDerivative() - Calculates derivatives for the spin equations of motion
+#            ├── d_dt_sx() - Calculates derivative for x component of spin
+#            ├── d_dt_sy() - Calculates derivative for y component of spin
+#            └── d_dt_sz() - Calculates derivative for z component of spin
 
 
-# Libary to compute the evolution of a dissipative system using the DTWA approach described in arXiv:2503.17443
 
-
-def d_dt_sx(i, omega_z, J, Gamma, xi_x, s_x, s_y, s_z):
+def d_dt_sx( omega_z,Omega_rabi, J, Gamma, xi_x, s_x, s_y, s_z):
     """
     Compute the time derivative of s_x for all spins following the DTWA approach.
     
     Parameters:
-    - i: index of the spin (not used in vectorized version)
     - omega_z: frequency parameter
+    - Omega_rabi: Rabi frequency parameter
     - J: coupling matrix
     - Gamma: damping matrix
     - xi_x: noise term array for x component for all spins
@@ -55,14 +69,13 @@ def d_dt_sx(i, omega_z, J, Gamma, xi_x, s_x, s_y, s_z):
     
     return derivatives
 
-def d_dt_sy(i, omega_z, Omega, J, Gamma, xi_y, s_x, s_y, s_z):
+def d_dt_sy(omega_z, Omega_rabi, J, Gamma, xi_y, s_x, s_y, s_z):
     """
     Compute the time derivative of s_y for all spins following the DTWA approach        .
     
     Parameters:
-    - i: index of the spin (not used in vectorized version)
     - omega_z: frequency parameter
-    - Omega: frequency parameter
+    - Omega_rabi: Rabi frequency parameter
     - J: coupling matrix
     - Gamma: damping matrix
     - xi_y: noise term array for y component for all spins
@@ -81,7 +94,7 @@ def d_dt_sy(i, omega_z, Omega, J, Gamma, xi_y, s_x, s_y, s_z):
     derivatives = 2 * omega_z * s_x
     
     # Second term: -2*Omega*s_z
-    derivatives -= 2 * Omega * s_z
+    derivatives -= 2 * Omega_rabi * s_z
     
     # Third term: -s_z[i]*sum_j J[i,j]*s_x[j] for each i
     # Compute J*s_x for all i (matrix-vector product)
@@ -102,17 +115,16 @@ def d_dt_sy(i, omega_z, Omega, J, Gamma, xi_y, s_x, s_y, s_z):
     
     return derivatives
 
-def d_dt_sz(i, Omega, J, Gamma, xi_x, xi_y, s_x, s_y, s_z):
+def d_dt_sz(Omega_rabi, J, Gamma, xi_x, xi_y, s_x, s_y):
     """
     Compute the time derivative of s_z for all spins following the DTWA approach.
     
     Parameters:
-    - i: index of the spin (not used in vectorized version)
     - Omega: frequency parameter
     - J: coupling matrix
     - Gamma: damping matrix
     - xi_x, xi_y: noise term arrays for x and y components for all spins
-    - s_x, s_y, s_z: spin component arrays
+    - s_x, s_y: spin component arrays
     
     Returns:
     - Array of time derivatives for s_z for all spins
@@ -125,7 +137,7 @@ def d_dt_sz(i, Omega, J, Gamma, xi_x, xi_y, s_x, s_y, s_z):
     derivatives = np.zeros(n, dtype=complex)
     
     # First term: +2*Omega*s_y
-    derivatives = 2 * Omega * s_y
+    derivatives = 2 * Omega_rabi * s_y
     
     # Second term: J term - vectorized computation
     # Create outer products for the calculations
@@ -213,7 +225,7 @@ def generate_etai_noise(gamma, dt, seed=None):
 def generate_noises(i,Num_particles, gamma, nu, dt, seed=None):
     """
     Generate the noise tensor in the site basis  by combining the Gaussian white noise variables
-    with the coupling matrix eigenvectors nu.
+    with the dissipation matrix eigenvectors nu.
     
     Parameters:
     - N: number of spins
@@ -247,7 +259,7 @@ def compute_green_tensor(r, omega, mu0=4*np.pi*1e-7, c=299792458):
     
     Parameters:
     - r: position vector (numpy array of shape (3,) or distance scalar)
-    - omega: angular frequency
+    - omega: angular frequency of the transition
     - mu0: magnetic permeability of vacuum (default: 4π×10^-7 H/m)
     - c: speed of light in vacuum (default: 299792458 m/s)
     
@@ -299,15 +311,16 @@ def compute_green_tensor(r, omega, mu0=4*np.pi*1e-7, c=299792458):
     return G
 
 
-def compute_gamma_matrix(positions, omega, dipole, c=3e8):
+def compute_gamma_matrix(positions, omega, dipole, c=3e8,Gamma_0=None):
     """
     Compute the damping matrix Γ for a system of dipoles.
     
     Parameters:
     - positions: List of position vectors for each dipole
-    - omega: Frequency
+    - omega: angular frequency of the transition
     - dipole: Dipole moment vector (assumed same for all dipoles)
     - c: Speed of light (default: 3e8 m/s)
+    - Gamma_0: Base decay rate (default: None)
     
     Returns:
     - Gamma: Damping matrix (numpy array of shape (N, N))
@@ -333,16 +346,16 @@ def compute_gamma_matrix(positions, omega, dipole, c=3e8):
     return Gamma
 
 
-def compute_J_matrix(positions, omega, dipole, c=3e8):
+def compute_J_matrix(positions, omega, dipole, c=3e8,Gamma_0=None):
     """
     Compute the coupling matrix J for a system of dipoles.
     
     Parameters:
     - positions: List of position vectors for each dipole
-    - omega: Frequency of the transition
+    - omega: angular frequency of the transition
     - dipole: Dipole moment vector (assumed same for all dipoles)
     - c: Speed of light (default: 3e8 m/s)
-    
+    - Gamma_0: Base decay rate (default: None)
     Returns:
     - J: Coupling matrix (numpy array of shape (N, N))
     """
@@ -368,14 +381,18 @@ def compute_J_matrix(positions, omega, dipole, c=3e8):
 
 
 # Define the derivative function for the spin dynamics
-def SpinDerivative(spins_current, positions, omega,omega_z, Omega_Rabi, dipole, c,xi_y, xi_x,Gamma_matrix,J_matrix):
+def SpinDerivative(spins_current, positions,omega,omega_z, Omega_Rabi, dipole, c,xi_y, xi_x,Gamma_matrix,J_matrix):
+    
     """
+
     Calculate the derivatives of the spins according to the TWA model.
     
     Parameters:
     - spins_current: Current spin vectors for all particles
     - positions: Positions of all particles
     - omega: Frequency
+    -omega_z: Detuning
+    - Omega_Rabi: Rabi frequency
     - dipole: Dipole moment vector
     - c: Speed of light
     - xi_x, xi_y: arrays of shape (N,) containing the combined noise variables
@@ -390,10 +407,9 @@ def SpinDerivative(spins_current, positions, omega,omega_z, Omega_Rabi, dipole, 
     # Generate noise arrays for all particles at once    
     # Calculate derivatives for all spins at once
 
-    derivatives[:, 0] = d_dt_sx(None, omega_z, J_matrix, Gamma_matrix, xi_x, spins_current[:, 0], spins_current[:, 1], spins_current[:, 2])
-    derivatives[:, 1] = d_dt_sy(None, omega_z, Omega_Rabi, J_matrix, Gamma_matrix, xi_y, spins_current[:, 0], spins_current[:, 1], spins_current[:, 2])
-    derivatives[:, 2] = d_dt_sz(None, Omega_Rabi, J_matrix, Gamma_matrix, xi_x, xi_y, spins_current[:, 0], spins_current[:, 1], spins_current[:, 2])
-
+    derivatives[:, 0] = d_dt_sx( omega_z,Omega_Rabi, J_matrix, Gamma_matrix, xi_x, spins_current[:, 0], spins_current[:, 1], spins_current[:, 2])
+    derivatives[:, 1] = d_dt_sy(omega_z, Omega_Rabi, J_matrix, Gamma_matrix, xi_y, spins_current[:, 0], spins_current[:, 1], spins_current[:, 2])
+    derivatives[:, 2] = d_dt_sz( Omega_Rabi, J_matrix, Gamma_matrix, xi_x, xi_y, spins_current[:, 0], spins_current[:, 1])
 
     return derivatives
 
@@ -488,8 +504,8 @@ def compute_spin_dynamics(
         # test with no interaction (expect OBEs)
         # dipole = dipole = 1/np.sqrt(2)*np.array([0, 0, 0])*atomic_dipole_moment  # Dipole moment direction (complex vector with imaginary y-component)
     
-        Gamma_matrix = compute_gamma_matrix(positions, omega, dipole, c)
-        J_matrix = compute_J_matrix(positions, omega, dipole, c)
+        Gamma_matrix = compute_gamma_matrix(positions, omega, dipole, c,Gamma_0)
+        J_matrix = compute_J_matrix(positions, omega, dipole, c,Gamma_0)
     
         # Gamma *= 2
     
@@ -544,8 +560,11 @@ def compute_spin_dynamics(
                 # Iterate until the norm stabilizes within 0.1% of the initial norm
                 midpoint_state = current_state
     
-                midpoint_state = current_state + dt * SpinDerivative(current_state, positions, omega,omega_z, Omega_Rabi, dipole, c, xi_y, xi_x,Gamma_matrix,J_matrix)
-                midpoint_derivative = SpinDerivative((midpoint_state+current_state)/2, positions, omega,omega_z, Omega_Rabi, dipole, c, xi_y, xi_x,Gamma_matrix,J_matrix)
+                midpoint_state = current_state + dt * SpinDerivative(current_state, positions,omega,omega_z, Omega_Rabi, dipole, c, xi_y, xi_x,Gamma_matrix,J_matrix)
+
+                midpoint_derivative = SpinDerivative((midpoint_state+current_state)/2, positions,omega,omega_z, Omega_Rabi, dipole, c, xi_y, xi_x,Gamma_matrix,J_matrix)
+
+
     
                 current_state = spin_evolution[step-1] + dt * midpoint_derivative
     
