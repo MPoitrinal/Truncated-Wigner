@@ -67,11 +67,10 @@ def plot_R_t(magnetization_list, times, Gammas, J_matrices, listNumparticles, Ga
             # Loop through all pairs of particles
             for i in range(num_particles_current):
                 for j in range(num_particles_current):
-                    if i != j:
                         # Off-diagonal terms: coherent contribution from dipole-dipole interactions
                         # Calculate <s⁺_i s⁻_j> averaged over all simulations
-                        R_t[t] += Gamma[i,j] * (np.dot(s_plus[:,t,i], s_minus[:,t,j]))/num_simulations
-                    else: 
+                    R_t[t] += Gamma[i,j] * (np.dot(s_plus[:,t,i], s_minus[:,t,j]))/num_simulations
+                    if i == j: 
                         # Diagonal terms: contribution from individual atoms
                         # Calculate <s_z> averaged over all simulations
                         R_t[t] += Gamma_0 * (np.sum(s_z[:,t,i]))/(2*num_simulations)
@@ -80,7 +79,7 @@ def plot_R_t(magnetization_list, times, Gammas, J_matrices, listNumparticles, Ga
         R_t /= Gamma_0*num_particles_current
         
         # Store the result for this particle configuration
-        R_t_list.append(R_t+0.5)
+        R_t_list.append(R_t)
         
         # Calculate and store the maximum value of R(t) for this configuration
         R_max = np.max(np.real(R_t))

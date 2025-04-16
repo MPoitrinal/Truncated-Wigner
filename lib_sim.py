@@ -423,21 +423,22 @@ def chain_positions(num_particles, spacing_factor,lambda_0):
         positions.append([i*spacing, 0, 0])
     return np.array(positions)
 
-def generate_thermal_distribution_in_cylinder(num_particles,lambda_0,T):
+def generate_thermal_distribution_in_cylinder(num_particles,spacing_factor,lambda_0,E_0):
 
     positions = np.zeros((num_particles, 3))
     
     # For a dipole trap, the potential is typically:
     # U(r,z) = U_0 * (1 - exp(-2r²/w_r²) * exp(-2z²/w_z²))
     # where w_r is the radial waist and w_z is the axial waist
-    radius = 0.5 * lambda_0  # cylinder radius
-    length = 20 * lambda_0  # cylinder length
+    radius = 0.5 * lambda_0 *spacing_factor # cylinder radius
+    length = 20 * lambda_0 *spacing_factor # cylinder length
     # Using the waists as the radius and length/2
     w_r = radius
+
     w_z = length/2
     
     # Temperature parameter (arbitrary units, can be adjusted)
-    kB_T = T*cst.Boltzmann  # in units of U_0
+    kB_T = E_0  # in units of U_0
     
     for i in range(num_particles):
         # Implement rejection sampling for thermal distribution
@@ -469,7 +470,6 @@ def generate_thermal_distribution_in_cylinder(num_particles,lambda_0,T):
 
 def compute_spin_dynamics_TWA(
     num_particles=10,
-    spacing_factor=1/10,
     Gamma_0=2*np.pi *6.065 *1e6,
     t_max_factor=1,
     num_steps=1000,
@@ -510,12 +510,8 @@ def compute_spin_dynamics_TWA(
     # The relation between Rabi frequency and intensity is:
     # Ω = γ * sqrt(I / (2 * Isat))
     # We're directly setting Rabi frequency rather than calculating from intensity
-
     c = 2.99792458e8     
                 # Speed of light in m/s (in units where ħ = 1)
-    atomic_dipole_moment = 2.533e-29 #C·m
-
-    dipole =(1/np.sqrt(2))*np.array([1, 1j, 0])*atomic_dipole_moment  # Dipole moment direction (complex vector with imaginary y-component)
 
     lambda_0 = 780e-9          # laser wavelength in m
                 # speed of light m/s (more precise value)
@@ -524,7 +520,8 @@ def compute_spin_dynamics_TWA(
     # Define simulation parameters
     t_max =  t_max_factor/Gamma_0 # Maximum simulation time (in appropriate units)
 
-    dt = t_max/1000 # Time step
+    dt = t_max/num_steps # Time step
+
     num_steps = int(t_max / dt)
 
 
@@ -540,16 +537,12 @@ def compute_spin_dynamics_TWA(
     tot_avg_magnetization = np.zeros((num_steps, 3))
 
     # Run a lot of simulations and average the results
-    num_simulations = 6000
-
     magnetization_list = []
 
     Gammas = []
 
     J_matrices = []
 
-
-    spacing = 2*lambda_0/10  # Spacing between particles in the chain
 
     Omega_Rabi = 0*Gamma_0
 
@@ -559,9 +552,9 @@ def compute_spin_dynamics_TWA(
         num_particles = listNumparticles[idx]
         # test with no interaction (expect OBEs)
 
-        Gamma = compute_gamma_matrix(positions, omega,Gamma_0, dipole, c)
+        Gamma = compute_gamma_matrix(positions, omega,Gamma_0, dipole_moment, c)
 
-        J_matrix = compute_J_matrix(positions, omega,Gamma_0, dipole, c)
+        J_matrix = compute_J_matrix(positions, omega,Gamma_0, dipole_moment, c)
 
         Gammas.append(Gamma)
 
@@ -614,11 +607,12 @@ def compute_spin_dynamics_TWA(
                 # Iterate until the norm stabilizes within 0.1% of the initial norm
                 midpoint_state = current_state
 
-                midpoint_state = current_state + dt * SpinDerivative(midpoint_state, positions, omega,Gamma_0,omega_z,Omega_Rabi,Gamma,J_matrix, dipole, c,xi_y, xi_x)
+                midpoint_state = current_state + dt * SpinDerivative(midpoint_state, positions, omega,Gamma_0,omega_z,Omega_Rabi,Gamma,J_matrix, dipole_moment, c,xi_y, xi_x)
 
-                midpoint_derivative = SpinDerivative((midpoint_state+current_state)/2, positions, omega,Gamma_0,omega_z,Omega_Rabi,Gamma,J_matrix, dipole, c,xi_y, xi_x)
+                midpoint_derivative = SpinDerivative((midpoint_state+current_state)/2, positions, omega,Gamma_0,omega_z,Omega_Rabi,Gamma,J_matrix, dipole_moment, c,xi_y, xi_x)
 
                 current_state = current_state + dt * midpoint_derivative
+                # if step%time_factor==0:
                 if step%time_factor==0:
                     spin_evolution[step//time_factor] = current_state
 
@@ -627,8 +621,6 @@ def compute_spin_dynamics_TWA(
                 # norms = np.linalg.norm(spin_evolution[step], axis=1, keepdims=True)
 
                 # spin_evolution[step] = spin_evolution[step] /norms
-
-            
             # Add to the total average
             magnetizations [sim] = spin_evolution
 

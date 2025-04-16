@@ -7,6 +7,34 @@ from functools import lru_cache
 import time
 
 
+# Function Hierarchy in lib_exact.py:
+# │
+# ├── Low-level Quantum Operators
+# │   ├── sigm(n, N) - Creates lowering operator for nth qubit
+# │   ├── sigp(n, N) - Creates raising operator for nth qubit
+# │   ├── sigz(n, N) - Creates Pauli-Z operator for nth qubit
+# │   ├── sigx(n, N) - Creates Pauli-X operator for nth qubit
+# │   └── single_ops(N) - Returns list of individual lowering operators
+# │
+# ├── Collective Operators
+# │   ├── s_minus(N) - Creates collective lowering operator
+# │   └── PowerOut(N, Gamma) - Creates collective lowering operator with Gamma weights
+# │
+# ├── Hamiltonian Construction
+# │   └── drive_hamiltonian(N, Ω) - Constructs system Hamiltonian with Rabi driving
+# │
+# ├── Green's Function Calculations
+# │   └── compute_green_tensor(r, omega, mu0, c) - Computes electromagnetic Green tensor
+# │
+# ├── Coupling Matrices
+# │   ├── compute_gamma_matrix(positions, omega, Gamma_0, dipole, c) - Computes decay rate matrix
+# │   └── compute_J_matrix(positions, omega, Gamma_0, dipole, c) - Computes energy shift matrix
+# │
+# └── Simulation Functions
+#     └── compute_spin_dynamics_exact(N, omega_z, Omega_R, positions, p_vector, omega, tlist, Gamma_0, psi0)
+#         - Main function for exact quantum simulation of N atoms
+
+
 # Create basic operators
 si = qt.qeye(2)
 sx = qt.sigmax()
