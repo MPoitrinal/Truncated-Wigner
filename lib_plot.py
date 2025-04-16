@@ -74,13 +74,13 @@ def plot_R_t(magnetization_list, times, Gammas, J_matrices, listNumparticles, Ga
                     else: 
                         # Diagonal terms: contribution from individual atoms
                         # Calculate <s_z> averaged over all simulations
-                        R_t[t] += Gamma_0 * (np.sum(s_z[:,t,i]))/(num_simulations)
+                        R_t[t] += Gamma_0 * (np.sum(s_z[:,t,i]))/(2*num_simulations)
                         
         # Normalize R(t) by N*Γ0 to get the enhancement factor
         R_t /= Gamma_0*num_particles_current
         
         # Store the result for this particle configuration
-        R_t_list.append(R_t)
+        R_t_list.append(R_t+0.5)
         
         # Calculate and store the maximum value of R(t) for this configuration
         R_max = np.max(np.real(R_t))
