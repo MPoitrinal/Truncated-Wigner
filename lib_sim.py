@@ -423,18 +423,15 @@ def chain_positions(num_particles, spacing_factor,lambda_0):
         positions.append([i*spacing, 0, 0])
     return np.array(positions)
 
-def generate_thermal_distribution_in_cylinder(num_particles,spacing_factor,lambda_0,E_0):
+def generate_thermal_distribution_in_cylinder(num_particles,radius,length,E_0):
 
     positions = np.zeros((num_particles, 3))
     
     # For a dipole trap, the potential is typically:
     # U(r,z) = U_0 * (1 - exp(-2r²/w_r²) * exp(-2z²/w_z²))
     # where w_r is the radial waist and w_z is the axial waist
-    radius = 0.5 * lambda_0 *spacing_factor # cylinder radius
-    length = 20 * lambda_0 *spacing_factor # cylinder length
     # Using the waists as the radius and length/2
     w_r = radius
-
     w_z = length/2
     
     # Temperature parameter (arbitrary units, can be adjusted)
